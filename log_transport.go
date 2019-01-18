@@ -14,6 +14,15 @@ type LogTransport struct {
 	Output    io.Writer
 }
 
+// WrapLogTransport wraps LogTransport around transport of client
+func WrapLogTransport(client *http.Client, output io.Writer) {
+	transport := client.Transport
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+	client.Transport = NewLogTransport(transport, output)
+}
+
 // NewLogTransport wraps provided transport into new logging transport. Optional
 // output can be provided, otherwise logging is being used
 func NewLogTransport(transport http.RoundTripper, output io.Writer) *LogTransport {
@@ -30,9 +39,9 @@ func (t *LogTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 	if t.Output != nil {
-		fmt.Fprintf(t.Output, "***** REQUEST ******\n%s\n***** REQUEST ******\n", string(raw))
+		fmt.Fprintf(t.Output, "***** REQUEST START ******\n%s\n***** REQUEST END ******\n", string(raw))
 	} else {
-		log.Printf("***** REQUEST ******\n%s\n***** REQUEST ******\n", string(raw))
+		log.Printf("***** REQUEST START ******\n%s\n***** REQUEST ******\n", string(raw))
 
 	}
 	return t.Transport.RoundTrip(req)
