@@ -4,13 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/tidwall/pretty"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"strings"
+
+	"github.com/fatih/color"
+	"github.com/hokaccha/go-prettyjson"
 )
 
 // JSONDebugTransport logs any throughgoing request
@@ -70,22 +72,16 @@ func (t *JSONDebugTransport) print(output string) {
 	}
 }
 
-func formatResponse(raw []byte) []byte {
+func formatHeaders(raw []byte) []byte {
 	lines := strings.Split(string(raw), "\r\n")
-	for i, line := range lines {
+	lines[0] = boldMessage(lines[0])
+	for i, line := range lines[1:] {
 		parts := strings.SplitN(line, ":", 2)
 		if len(parts) == 2 {
-			lines[i] = "\033[1m" + parts[0] + ":\033[0m" + parts[1]
+			lines[i+1] = boldMessage(parts[0]+":") + parts[1]
 		}
 	}
 	return []byte(strings.Join(lines, "\r\n"))
-}
-
-func formatRequest(raw []byte) []byte {
-	lines := strings.Split(string(raw), "\r\n")
-	head := "\033[1m" + lines[0] + "\033[0m"
-	body := string(formatResponse([]byte(strings.Join(lines[1:], "\r\n"))))
-	return []byte(head + "\r\n" + body)
 }
 
 func dumpRequest(req *http.Request, forceJSON bool) ([]byte, error) {
@@ -102,11 +98,12 @@ func dumpRequest(req *http.Request, forceJSON bool) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	raw = formatHeaders(raw)
 	if jsonBody != nil {
 		raw = append(raw, '\n')
 		raw = append(raw, jsonBody...)
 	}
-	return formatRequest(raw), nil
+	return raw, nil
 }
 
 func dumpResponse(res *http.Response, forceJSON bool) []byte {
@@ -114,20 +111,21 @@ func dumpResponse(res *http.Response, forceJSON bool) []byte {
 	if forceJSON || strings.Contains(res.Header.Get("content-type"), "json") {
 		orig, err := ioutil.ReadAll(res.Body)
 		if err != nil {
-			return []byte(fmt.Sprintf("FAILED to read response body: %s", err))
+			return []byte(errorMessage("FAILED to read response body: %s", err))
 		}
 		jsonBody = decodeJSON(orig)
 		res.Body = ioutil.NopCloser(bytes.NewBuffer(orig))
 	}
 	raw, err := httputil.DumpResponse(res, jsonBody == nil)
 	if err != nil {
-		return []byte(fmt.Sprintf("FAILED to dump response: %s", err))
+		return []byte(errorMessage("FAILED to dump response: %s", err))
 	}
+	raw = formatHeaders(raw)
 	if jsonBody != nil {
 		raw = append(raw, '\n')
 		raw = append(raw, jsonBody...)
 	}
-	return formatResponse(raw)
+	return raw
 }
 
 func decodeJSON(raw []byte) []byte {
@@ -141,12 +139,20 @@ func decodeJSON(raw []byte) []byte {
 		if err := json.Unmarshal(raw, &attempt); err != nil {
 			continue
 		}
-		rendered := bytes.TrimSpace(pretty.Pretty(raw))
-		/*rendered, err := json.MarshalIndent(attempt, "", "  ")
+		//rendered, err := json.MarshalIndent(attempt, "", "  ")
+		rendered, err := prettyjson.Marshal(attempt)
 		if err != nil {
-			return []byte(fmt.Sprintf("invalid JSON (%s):\n--\n%s\n--\n", err, string(raw)))
-		}*/
+			return []byte(errorMessage("invalid JSON (%s):\n--\n%s\n--\n", err, string(raw)))
+		}
 		return rendered
 	}
-	return []byte(fmt.Sprintf("unparsable JSON:\n--\n%s\n--\n", string(raw)))
+	return []byte(errorMessage("unparsable JSON:\n--\n%s\n--\n", string(raw)))
+}
+
+func boldMessage(msg string, args ...interface{}) string {
+	return color.New(color.FgWhite, color.Bold).Sprintf(msg, args...)
+}
+
+func errorMessage(msg string, args ...interface{}) string {
+	return color.New(color.FgRed, color.Bold).Sprintf(msg, args...)
 }
