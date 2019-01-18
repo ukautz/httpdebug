@@ -14,7 +14,7 @@ func (t *noNextTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return nil, nil
 }
 
-var testLogTransportOut = `****** REQUEST START ******
+var testLogTransportJSONOut = `****** REQUEST START ******
 GET /baz HTTP/1.1
 Host: foo.bar
 User-Agent: Go-http-client/1.1
@@ -29,6 +29,17 @@ Accept-Encoding: gzip
 ****** REQUEST END ******
 `
 
+var testLogTransportNoJSONOut = `****** REQUEST START ******
+GET /baz HTTP/1.1
+Host: foo.bar
+User-Agent: Go-http-client/1.1
+Accept: text/json
+Accept-Encoding: gzip
+
+
+****** REQUEST END ******
+`
+
 func TestLogTransport(t *testing.T) {
 	out := bytes.NewBuffer(nil)
 	in := bytes.NewBufferString(`{"foo":"bar"}`)
@@ -39,5 +50,17 @@ func TestLogTransport(t *testing.T) {
 	_, err = transport.RoundTrip(req)
 	assert.NoError(t, err)
 	str := strings.Replace(out.String(), "\r\n", "\n", -1)
-	assert.Equal(t, testLogTransportOut, str)
+	assert.Equal(t, testLogTransportJSONOut, str)
+}
+
+func TestLogTransport_NoBody(t *testing.T) {
+	out := bytes.NewBuffer(nil)
+	transport := NewLogTransport(&noNextTransport{}, out)
+	req, err := http.NewRequest("GET", "http://foo.bar/baz", nil)
+	req.Header.Add("accept", "text/json")
+	assert.NoError(t, err)
+	_, err = transport.RoundTrip(req)
+	assert.NoError(t, err)
+	str := strings.Replace(out.String(), "\r\n", "\n", -1)
+	assert.Equal(t, testLogTransportNoJSONOut, str)
 }

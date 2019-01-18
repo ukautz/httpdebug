@@ -39,7 +39,7 @@ func NewLogTransport(transport http.RoundTripper, output io.Writer) *LogTranspor
 // RoundTrip implements the http.RoundTripper interface
 func (t *LogTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	var jsonBody []byte
-	if t.ForceJSON || strings.Contains(req.Header.Get("accept"), "json") {
+	if req.Body != nil && (t.ForceJSON || strings.Contains(req.Header.Get("accept"), "json")) {
 		orig, err := ioutil.ReadAll(req.Body)
 		if err != nil {
 			return nil, err
