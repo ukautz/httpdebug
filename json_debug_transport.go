@@ -23,6 +23,28 @@ type JSONDebugTransport struct {
 	Plain     bool
 }
 
+var RenderRequestDump = func(dump string) string {
+	return color.CyanString("## REQUEST {") + "\n" +
+		dump + "\n" +
+		color.CyanString("## REQUEST }") + "\n\n"
+}
+
+var RenderResponseDump = func(dump string) string {
+	return color.YellowString("## RESPONSE {") + "\n" +
+		dump + "\n" +
+		color.YellowString("## RESPONSE }") + "\n\n"
+}
+
+var RenderResponseErrorDump = func(dump string) string {
+	return color.HiRedString("## RESPONSE ERROR {") + "\n" +
+		dump + "\n" +
+		color.HiRedString("## RESPONSE ERROR }") + "\n\n"
+}
+
+var RenderNoResponse = func() string {
+	return color.HiYellowString("((( NO RESPONSE )))\n\n")
+}
+
 // WrapJSONDebugTransport wraps JSONDebugTransport around transport of client
 func WrapJSONDebugTransport(client *http.Client, output io.Writer) {
 	client.Transport = NewJSONDebugTransport(client.Transport, output)
@@ -46,19 +68,17 @@ func (t *JSONDebugTransport) RoundTrip(req *http.Request) (*http.Response, error
 	if err != nil {
 		return nil, err
 	}
-	t.print(fmt.Sprintf("****** REQUEST START ******\n%s\n****** REQUEST END ******\n", requestDump))
+	t.print(RenderRequestDump(string(requestDump)))
 
 	res, err := t.Transport.RoundTrip(req)
 	if err != nil {
-		t.print(fmt.Sprintf("\n!!!!!! RESPONSE ERROR !!!!!!\n%s\n!!!!!! RESPONSE ERROR !!!!!!\n", requestDump))
+		t.print(RenderResponseErrorDump(string(requestDump)))
 		return nil, err
-	}
-
-	if res != nil {
+	} else if res != nil {
 		responseDump := dumpResponse(res, t.ForceJSON)
-		t.print(fmt.Sprintf("\n****** RESPONSE START ******\n%s\n****** RESPONSE END ******\n", responseDump))
+		t.print(RenderResponseDump(string(responseDump)))
 	} else {
-		t.print(fmt.Sprintln("\n~~~~~~ NO RESPONSE ~~~~~~"))
+		t.print(RenderNoResponse())
 	}
 
 	return res, nil
@@ -70,6 +90,10 @@ func (t *JSONDebugTransport) print(output string) {
 	} else {
 		log.Print(output)
 	}
+}
+
+func ForceColor() {
+	color.NoColor = false
 }
 
 func formatHeaders(raw []byte) []byte {

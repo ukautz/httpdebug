@@ -33,7 +33,7 @@ func (t *testTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return res, nil
 }
 
-var testJSONDebugTransportJSONOut = `****** REQUEST START ******
+var testJSONDebugTransportJSONOut = `## REQUEST {
 GET /baz HTTP/1.1
 Host: foo.bar
 User-Agent: Go-http-client/1.1
@@ -45,16 +45,15 @@ Accept-Encoding: gzip
 {
   "foo": "bar"
 }
-****** REQUEST END ******
+## REQUEST }
 
-****** RESPONSE START ******
+## RESPONSE {
 HTTP/1.0 200 OK
 Content-Type: text/plain
 Content-Length: 0
 
 
-****** RESPONSE END ******
-`
+## RESPONSE }`
 
 func TestJSONDebugTransport(t *testing.T) {
 	out := bytes.NewBuffer(nil)
@@ -65,11 +64,11 @@ func TestJSONDebugTransport(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = transport.RoundTrip(req)
 	assert.NoError(t, err)
-	str := stripColors(normalizeLineBreak(out.String()))
+	str := strip(out.String())
 	assert.Equal(t, testJSONDebugTransportJSONOut, str)
 }
 
-var testJSONDebugTransportNoJSONOut = `****** REQUEST START ******
+var testJSONDebugTransportNoJSONOut = `## REQUEST {
 GET /baz HTTP/1.1
 Host: foo.bar
 User-Agent: Go-http-client/1.1
@@ -77,16 +76,15 @@ Accept: text/json
 Accept-Encoding: gzip
 
 
-****** REQUEST END ******
+## REQUEST }
 
-****** RESPONSE START ******
+## RESPONSE {
 HTTP/1.0 200 OK
 Content-Type: text/plain
 Content-Length: 0
 
 
-****** RESPONSE END ******
-`
+## RESPONSE }`
 
 func TestJSONDebugTransport_NoBody(t *testing.T) {
 	out := bytes.NewBuffer(nil)
@@ -96,11 +94,11 @@ func TestJSONDebugTransport_NoBody(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = transport.RoundTrip(req)
 	assert.NoError(t, err)
-	str := stripColors(normalizeLineBreak(out.String()))
+	str := strip(out.String())
 	assert.Equal(t, testJSONDebugTransportNoJSONOut, str)
 }
 
-var testJSONDebugTransportJSONResponseOut = `****** REQUEST START ******
+var testJSONDebugTransportJSONResponseOut = `## REQUEST {
 GET /baz HTTP/1.1
 Host: foo.bar
 User-Agent: Go-http-client/1.1
@@ -108,9 +106,9 @@ Accept: text/json
 Accept-Encoding: gzip
 
 
-****** REQUEST END ******
+## REQUEST }
 
-****** RESPONSE START ******
+## RESPONSE {
 HTTP/1.0 200 OK
 Content-Type: text/json
 Content-Length: 0
@@ -119,8 +117,7 @@ Content-Length: 0
 {
   "message": "OK"
 }
-****** RESPONSE END ******
-`
+## RESPONSE }`
 
 func TestJSONDebugTransport_JSONResponse(t *testing.T) {
 	out := bytes.NewBuffer(nil)
@@ -130,8 +127,12 @@ func TestJSONDebugTransport_JSONResponse(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = transport.RoundTrip(req)
 	assert.NoError(t, err)
-	str := stripColors(normalizeLineBreak(out.String()))
+	str := strip(out.String())
 	assert.Equal(t, testJSONDebugTransportJSONResponseOut, str)
+}
+
+func strip(from string) string {
+	return strings.TrimSpace(stripColors(normalizeLineBreak(from)))
 }
 
 func normalizeLineBreak(from string) string {
