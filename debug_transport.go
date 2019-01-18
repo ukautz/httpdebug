@@ -20,7 +20,7 @@ type DebugTransport struct {
 }
 
 // WrapDebugTransport wraps DebugTransport around transport of client
-func WrapLogTransport(client *http.Client, output io.Writer) {
+func WrapDebugTransport(client *http.Client, output io.Writer) {
 	client.Transport = NewDebugTransport(client.Transport, output)
 }
 
