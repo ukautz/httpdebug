@@ -5,6 +5,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"net/http"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -31,7 +32,7 @@ func (t *testTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return res, nil
 }
 
-var testDebugTransportJSONOut = `****** REQUEST START ******
+var testJSONDebugTransportJSONOut = `****** REQUEST START ******
 GET /baz HTTP/1.1
 Host: foo.bar
 User-Agent: Go-http-client/1.1
@@ -54,20 +55,20 @@ Content-Length: 0
 ****** RESPONSE END ******
 `
 
-func TestDebugTransport(t *testing.T) {
+func TestJSONDebugTransport(t *testing.T) {
 	out := bytes.NewBuffer(nil)
 	in := bytes.NewBufferString(`{"foo":"bar"}`)
-	transport := NewDebugTransport(&testTransport{}, out)
+	transport := NewJSONDebugTransport(&testTransport{}, out)
 	req, err := http.NewRequest("GET", "http://foo.bar/baz", in)
 	req.Header.Add("accept", "text/json")
 	assert.NoError(t, err)
 	_, err = transport.RoundTrip(req)
 	assert.NoError(t, err)
-	str := strings.Replace(out.String(), "\r\n", "\n", -1)
-	assert.Equal(t, testDebugTransportJSONOut, str)
+	str := stripColors(normalizeLineBreak(out.String()))
+	assert.Equal(t, testJSONDebugTransportJSONOut, str)
 }
 
-var testDebugTransportNoJSONOut = `****** REQUEST START ******
+var testJSONDebugTransportNoJSONOut = `****** REQUEST START ******
 GET /baz HTTP/1.1
 Host: foo.bar
 User-Agent: Go-http-client/1.1
@@ -86,19 +87,19 @@ Content-Length: 0
 ****** RESPONSE END ******
 `
 
-func TestDebugTransport_NoBody(t *testing.T) {
+func TestJSONDebugTransport_NoBody(t *testing.T) {
 	out := bytes.NewBuffer(nil)
-	transport := NewDebugTransport(&testTransport{}, out)
+	transport := NewJSONDebugTransport(&testTransport{}, out)
 	req, err := http.NewRequest("GET", "http://foo.bar/baz", nil)
 	req.Header.Add("accept", "text/json")
 	assert.NoError(t, err)
 	_, err = transport.RoundTrip(req)
 	assert.NoError(t, err)
-	str := strings.Replace(out.String(), "\r\n", "\n", -1)
-	assert.Equal(t, testDebugTransportNoJSONOut, str)
+	str := stripColors(normalizeLineBreak(out.String()))
+	assert.Equal(t, testJSONDebugTransportNoJSONOut, str)
 }
 
-var testDebugTransportJSONResponseOut = `****** REQUEST START ******
+var testJSONDebugTransportJSONResponseOut = `****** REQUEST START ******
 GET /baz HTTP/1.1
 Host: foo.bar
 User-Agent: Go-http-client/1.1
@@ -120,15 +121,24 @@ Content-Length: 0
 ****** RESPONSE END ******
 `
 
-func TestDebugTransport_JSONResponse(t *testing.T) {
+func TestJSONDebugTransport_JSONResponse(t *testing.T) {
 	out := bytes.NewBuffer(nil)
-	in := bytes.NewBufferString(`{"foo":"bar"}`)
-	transport := NewDebugTransport(&testTransport{body: []byte(`{"message":"OK"}`)}, out)
-	req, err := http.NewRequest("GET", "http://foo.bar/baz", in)
+	transport := NewJSONDebugTransport(&testTransport{body: []byte(`{"message":"OK"}`)}, out)
+	req, err := http.NewRequest("GET", "http://foo.bar/baz", nil)
 	req.Header.Add("accept", "text/json")
 	assert.NoError(t, err)
 	_, err = transport.RoundTrip(req)
 	assert.NoError(t, err)
-	str := strings.Replace(out.String(), "\r\n", "\n", -1)
-	assert.Equal(t, testDebugTransportJSONResponseOut, str)
+	str := stripColors(normalizeLineBreak(out.String()))
+	assert.Equal(t, testJSONDebugTransportJSONResponseOut, str)
+}
+
+func normalizeLineBreak(from string) string {
+	return strings.Join(strings.Split(from, "\r\n"), "\n")
+}
+
+var colorStrip = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func stripColors(from string) string {
+	return colorStrip.ReplaceAllString(from, "")
 }

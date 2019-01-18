@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/tidwall/pretty"
 	"io"
 	"io/ioutil"
 	"log"
@@ -12,32 +13,33 @@ import (
 	"strings"
 )
 
-// DebugTransport logs any throughgoing request
-type DebugTransport struct {
+// JSONDebugTransport logs any throughgoing request
+type JSONDebugTransport struct {
 	Transport http.RoundTripper
 	Output    io.Writer
 	ForceJSON bool
+	Plain     bool
 }
 
-// WrapDebugTransport wraps DebugTransport around transport of client
-func WrapDebugTransport(client *http.Client, output io.Writer) {
-	client.Transport = NewDebugTransport(client.Transport, output)
+// WrapJSONDebugTransport wraps JSONDebugTransport around transport of client
+func WrapJSONDebugTransport(client *http.Client, output io.Writer) {
+	client.Transport = NewJSONDebugTransport(client.Transport, output)
 }
 
-// NewDebugTransport wraps provided transport into new logging transport. Optional
+// NewJSONDebugTransport wraps provided transport into new logging transport. Optional
 // output can be provided, otherwise logging is being used
-func NewDebugTransport(transport http.RoundTripper, output io.Writer) *DebugTransport {
+func NewJSONDebugTransport(transport http.RoundTripper, output io.Writer) *JSONDebugTransport {
 	if transport == nil {
 		transport = http.DefaultTransport
 	}
-	return &DebugTransport{
+	return &JSONDebugTransport{
 		Transport: transport,
 		Output:    output,
 	}
 }
 
 // RoundTrip implements the http.RoundTripper interface
-func (t *DebugTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+func (t *JSONDebugTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	requestDump, err := dumpRequest(req, t.ForceJSON)
 	if err != nil {
 		return nil, err
@@ -60,12 +62,30 @@ func (t *DebugTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return res, nil
 }
 
-func (t *DebugTransport) print(output string) {
+func (t *JSONDebugTransport) print(output string) {
 	if t.Output != nil {
 		fmt.Fprint(t.Output, output)
 	} else {
 		log.Print(output)
 	}
+}
+
+func formatResponse(raw []byte) []byte {
+	lines := strings.Split(string(raw), "\r\n")
+	for i, line := range lines {
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) == 2 {
+			lines[i] = "\033[1m" + parts[0] + ":\033[0m" + parts[1]
+		}
+	}
+	return []byte(strings.Join(lines, "\r\n"))
+}
+
+func formatRequest(raw []byte) []byte {
+	lines := strings.Split(string(raw), "\r\n")
+	head := "\033[1m" + lines[0] + "\033[0m"
+	body := string(formatResponse([]byte(strings.Join(lines[1:], "\r\n"))))
+	return []byte(head + "\r\n" + body)
 }
 
 func dumpRequest(req *http.Request, forceJSON bool) ([]byte, error) {
@@ -86,7 +106,7 @@ func dumpRequest(req *http.Request, forceJSON bool) ([]byte, error) {
 		raw = append(raw, '\n')
 		raw = append(raw, jsonBody...)
 	}
-	return raw, nil
+	return formatRequest(raw), nil
 }
 
 func dumpResponse(res *http.Response, forceJSON bool) []byte {
@@ -107,7 +127,7 @@ func dumpResponse(res *http.Response, forceJSON bool) []byte {
 		raw = append(raw, '\n')
 		raw = append(raw, jsonBody...)
 	}
-	return raw
+	return formatResponse(raw)
 }
 
 func decodeJSON(raw []byte) []byte {
@@ -121,10 +141,11 @@ func decodeJSON(raw []byte) []byte {
 		if err := json.Unmarshal(raw, &attempt); err != nil {
 			continue
 		}
-		rendered, err := json.MarshalIndent(attempt, "", "  ")
+		rendered := bytes.TrimSpace(pretty.Pretty(raw))
+		/*rendered, err := json.MarshalIndent(attempt, "", "  ")
 		if err != nil {
 			return []byte(fmt.Sprintf("invalid JSON (%s):\n--\n%s\n--\n", err, string(raw)))
-		}
+		}*/
 		return rendered
 	}
 	return []byte(fmt.Sprintf("unparsable JSON:\n--\n%s\n--\n", string(raw)))
